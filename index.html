@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Poké-Multi Games</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        body { background: #121212; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 10px; }
+        .hidden { display: none; }
+        .box { background: #1e1e1e; border: 2px solid #ee1515; padding: 20px; border-radius: 15px; display: inline-block; width: 400px; vertical-align: top; margin: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); position: relative; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; transition: 0.2s; }
+        input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #2a2a2a; color: white; margin-bottom: 10px; width: 85%; }
+        
+        /* Stats Table Style (Orange) */
+        .stats-table { width: 100%; border-collapse: collapse; background: white; color: #333; margin-top: 10px; border-radius: 5px; overflow: hidden; }
+        .stats-table th { background: #ff8c00; color: white; padding: 10px; }
+        .stats-table td { padding: 8px; border: 1px solid #eee; text-align: left; }
+        .stat-bar { height: 12px; border-radius: 6px; display: inline-block; }
+
+        .gold-txt { color: gold; font-weight: bold; }
+        .author { font-size: 0.9em; color: #888; margin-top: 20px; border-top: 1px solid #333; padding-top: 10px; }
+        .leaderboard-table { width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 0.9em; }
+        .leaderboard-table th { background: #ee1515; padding: 8px; }
+        .leaderboard-table td { background: #252525; padding: 8px; border-bottom: 1px solid #333; }
+
+        #shop-ui { background: rgba(0,0,0,0.95); position: fixed; top:0; left:0; width:100%; height:100%; z-index: 2000; display: flex; align-items: center; justify-content: center; }
+        .btn-stat { background: #333; color: white; width: 100%; border: 1px solid #555; }
+        .btn-stat:hover:not(:disabled) { background: #ee1515; }
+    </style>
+</head>
+<body>
+
+    <div id="shop-ui" class="hidden">
+        <div class="box">
+            <h2>🏪 BOUTIQUE</h2>
+            <p>Golds : <span id="shop-gold-count" class="gold-txt">0</span> 💰</p>
+            <button onclick="buyItem('gold_name', 500)" style="background:gold;">Pseudo Doré (500 💰)</button> <br>
+            <button onclick="toggleShop()">FERMER</button>
+        </div>
+    </div>
+
+    <div id="lobby" class="box">
+        <h1>Poké-Multi Games</h1>
+        <p>Joueur : <span id="display-name" class="gold-txt">...</span></p>
+        <div style="background: rgba(255,215,0,0.1); border: 1px solid gold; padding: 5px; border-radius: 10px; display: inline-block;">
+            💰 <span id="lobby-gold-count">0</span>
+        </div>
+
+        <div style="margin: 20px 0; border: 1px solid #444; padding: 10px; border-radius: 10px;">
+            <p style="margin-top:0;"><b>1. Choisir le mode :</b></p>
+            <button id="m-battle" onclick="setMode('battle')" style="background: #ee1515; color:white; border: 2px solid gold;">POKÉ-BATTLE</button>
+            <button id="m-guess" onclick="setMode('guess')" style="background: #333; color:white;">QUI EST-CE ?</button>
+        </div>
+
+        <input type="text" id="r" placeholder="Code de la Room"> <br>
+        <button onclick="go(true)" style="background: #ee1515; color: white;">HOST (CRÉER)</button>
+        <button onclick="go(false)" style="background: #3b4cca; color: white;">REJOINDRE</button>
+        <br>
+        <button onclick="toggleShop()" style="background: #444; color: white; margin-top: 10px;">🛒 ACCÉDER À LA BOUTIQUE</button>
+
+        <div id="leaderboard-zone">
+            <h3>🗓️ TOP 7 SEMAINE (BATTLE)</h3>
+            <table class="leaderboard-table">
+                <thead><tr><th>Date</th><th>Joueur</th><th>Score</th></tr></thead>
+                <tbody id="leader-body">
+                    <tr><td>2026-04-08</td><td>vegechou</td><td class="gold-txt">604</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="author">Réalisé par <b>vegechou</b></div>
+    </div>
+
+    <div id="game-battle" class="hidden">
+        <div class="box">
+            <h3 id="round-txt">Round 1 / 6</h3>
+            <div id="combat-zone">
+                <h2 id="n-battle">???</h2>
+                <img id="i-battle" src="" style="width:200px; height:200px; object-fit: contain; margin-bottom: 10px;">
+                
+                <div style="background: #2a2a2a; padding: 10px; border-radius: 10px; margin-bottom: 10px;">
+                    <small>Modifie un type pour bluffer l'adversaire :</small><br>
+                    Type 1: <input type="text" id="type-bluff" style="width: 60%; font-size: 0.8em; margin: 5px;" placeholder="ex: Water">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button class="btn-stat" id="btn-hp" onclick="choisirStat('hp')">PV</button>
+                    <button class="btn-stat" id="btn-atk" onclick="choisirStat('atk')">ATTAQUE</button>
+                    <button class="btn-stat" id="btn-def" onclick="choisirStat('def')">DÉFENSE</button>
+                    <button class="btn-stat" id="btn-spa" onclick="choisirStat('spa')">ATK SPÉ.</button>
+                    <button class="btn-stat" id="btn-spd" onclick="choisirStat('spd')">DÉF SPÉ.</button>
+                    <button class="btn-stat" id="btn-spe" onclick="choisirStat('spe')">VITESSE</button>
+                </div>
+                <p id="wait-msg" style="color: gold; margin-top: 10px; font-weight: bold;"></p>
+            </div>
+
+            <div id="res-battle" class="hidden">
+                <h2 id="win-txt"></h2>
+                <table class="stats-table">
+                    <thead><tr><th>Statistique</th><th>Base</th></tr></thead>
+                    <tbody id="stats-body"></tbody>
+                </table>
+                <p id="score-detail"></p>
+                <button id="next-btn" style="background: gold; color: black; display:none;" onclick="triggerNext()">ROUND SUIVANT</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const conf = { databaseURL: "https://pokebattle-3c608-default-rtdb.europe-west1.firebasedatabase.app/" };
+        firebase.initializeApp(conf);
+        const db = firebase.database();
+
+        let userGolds = parseInt(localStorage.getItem('pokeGolds')) || 0;
+        let user = localStorage.getItem('pokeUser') || prompt("Pseudo :") || "Joueur";
+        localStorage.setItem('pokeUser', user);
+        
+        function updateGolds() {
+            localStorage.setItem('pokeGolds', userGolds);
+            document.getElementById('lobby-gold-count').innerText = userGolds;
+            document.getElementById('shop-gold-count').innerText = userGolds;
+        }
+        updateGolds();
+        document.getElementById('display-name').innerText = user;
+
+        let room, host, mode = 'battle', roomRef, currentStats, myTotal = 0, currentRound = 1;
+
+        function setMode(m) { mode = m; }
+        function toggleShop() { document.getElementById('shop-ui').classList.toggle('hidden'); }
+        function buyItem(id, p) { if(userGolds >= p) { userGolds -= p; updateGolds(); alert("Acheté !"); } }
+
+        async function getPoke() {
+            const id = Math.floor(Math.random() * 1010) + 1;
+            const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+            const p = await r.json();
+            return {
+                name: p.name.toUpperCase(),
+                img: p.sprites.other['official-artwork'].front_default,
+                stats: { hp:p.stats[0].base_stat, atk:p.stats[1].base_stat, def:p.stats[2].base_stat, spa:p.stats[3].base_stat, spd:p.stats[4].base_stat, spe:p.stats[5].base_stat }
+            };
+        }
+
+        async function go(isHost) {
+            room = document.getElementById('r').value.trim(); host = isHost;
+            if(!room) return alert("Code !");
+            roomRef = db.ref('rooms/' + room);
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('game-battle').classList.remove('hidden');
+
+            if(host) {
+                const p = await getPoke();
+                roomRef.set({ mode, poke: p, round: 1, showFinal: false });
+            }
+            roomRef.child('players/' + user).set({ name: user, val: -1, total: 0 });
+            roomRef.on('value', snap => {
+                const d = snap.val(); if(!d) return;
+                if(d.showFinal) showFinal(d); else renderBattle(d);
+            });
+        }
+
+        function renderBattle(d) {
+            currentRound = d.round;
+            currentStats = d.poke.stats;
+            document.getElementById('round-txt').innerText = `Round ${d.round} / 6`;
+            document.getElementById('n-battle').innerText = d.poke.name;
+            document.getElementById('i-battle').src = d.poke.img;
+
+            const pl = d.players || {};
+            const keys = Object.keys(pl);
+            if(keys.length < 2) { document.getElementById('wait-msg').innerText = "Attente adversaire..."; return; }
+
+            const p1 = pl[keys[0]], p2 = pl[keys[1]];
+            
+            if(p1.val !== -1 && p2.val !== -1) {
+                document.getElementById('combat-zone').classList.add('hidden');
+                document.getElementById('res-battle').classList.remove('hidden');
+                let win = p1.val > p2.val ? p1.name : (p2.val > p1.val ? p2.name : "Égalité");
+                document.getElementById('win-txt').innerText = "🏆 " + win;
+                document.getElementById('score-detail').innerText = `${p1.name} (${p1.val}) vs ${p2.name} (${p2.val})`;
+                
+                // Remplir le tableau orange
+                const tbody = document.getElementById('stats-body');
+                tbody.innerHTML = "";
+                const labels = {hp:'PV', atk:'Attaque', def:'Défense', spa:'Attaque Spéciale', spd:'Défense Spéciale', spe:'Vitesse'};
+                const colors = {hp:'#90ee90', atk:'#fffacd', def:'#ffdab9', spa:'#afeeee', spd:'#b0c4de', spe:'#e6e6fa'};
+                for(let s in currentStats) {
+                    tbody.innerHTML += `<tr><td>${labels[s]}</td><td>${currentStats[s]} <span class="stat-bar" style="width:${currentStats[s]}px; background:${colors[s]}"></span></td></tr>`;
+                }
+                if(host) document.getElementById('next-btn').style.display = "block";
+            } else {
+                document.getElementById('combat-zone').classList.remove('hidden');
+                document.getElementById('res-battle').classList.add('hidden');
+                const hasPlayed = pl[user].val !== -1;
+                document.getElementById('wait-msg').innerText = hasPlayed ? "Choix validé ! Attente de l'autre..." : "";
+                document.querySelectorAll('.btn-stat').forEach(b => b.disabled = hasPlayed);
+            }
+        }
+
+        function choisirStat(id) {
+            const val = currentStats[id];
+            myTotal += val;
+            roomRef.child('players/' + user).update({ val: val, total: myTotal });
+        }
+
+        async function triggerNext() {
+            if(currentRound >= 6) roomRef.update({ showFinal: true });
+            else {
+                const p = await getPoke();
+                roomRef.update({ poke: p, round: currentRound + 1 });
+                roomRef.child('players').once('value', s => s.forEach(c => c.ref.update({ val: -1 })));
+            }
+        }
+
+        function showFinal(d) {
+            document.getElementById('game-battle').classList.add('hidden');
+            document.getElementById('lobby').classList.add('hidden');
+            const end = document.createElement('div');
+            end.className = "box";
+            let high = -1, winner = "";
+            for(let k in d.players) {
+                let p = d.players[k];
+                end.innerHTML += `<h2>${p.name} : ${p.total}</h2>`;
+                if(p.total > high) { high = p.total; winner = p.name; }
+            }
+            if(winner === user) { userGolds += 100; updateGolds(); end.innerHTML += "<h1 class='gold-txt'>VICTOIRE +100 💰</h1>"; }
+            end.innerHTML += `<button onclick="location.reload()">RETOUR</button>`;
+            document.body.appendChild(end);
+        }
+    </script>
+</body>
+</html>
