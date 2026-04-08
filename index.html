@@ -18,11 +18,10 @@
         .btn-stat { background: #333; color: white; border: 1px solid #555; width: 120px; height: 45px; font-size: 0.8em; }
         .btn-stat.selected { border: 2px solid gold; background: #443a10; }
         .btn-stat.locked { background: #111 !important; color: #555 !important; border: 1px solid #222 !important; cursor: not-allowed; opacity: 0.6; }
-        .btn-stat.locked::after { content: " 🔒"; }
-        #timer { font-size: 2.5em; color: #ee1515; font-weight: bold; margin: 10px; text-shadow: 0 0 10px rgba(238,21,21,0.5); }
         .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .poke-card img { width: 100%; pointer-events: none; }
         .poke-card.gray { filter: grayscale(100%); opacity: 0.3; }
+        .poke-card.selected-target { border-color: gold !important; background: #443a10; }
         #chat-zone { background: #111; height: 150px; overflow-y: auto; padding: 10px; text-align: left; font-size: 0.9em; margin-bottom: 10px; border-radius: 10px; border: 1px solid #444; }
         .res-img { width: 80px; height: 80px; background: #333; border-radius: 10px; margin: 5px; }
         .final-panel { background: #252525; border: 2px solid gold; padding: 15px; border-radius: 15px; margin-top: 10px; }
@@ -82,20 +81,20 @@
         <div class="box">
             <div id="setup-guess">
                 <h2 id="setup-title">Choisis ton Pokémon</h2>
-                <p id="setup-msg">Clique sur un Pokémon dans la grille.</p>
+                <p id="setup-msg">Clique sur une carte à gauche.</p>
                 <button id="btn-valider-guess" style="background:gold; padding: 15px;" onclick="readyGuess()">VALIDER MON CHOIX</button>
             </div>
             <div id="play-guess" class="hidden">
                 <div id="chat-zone"></div>
                 <input type="text" id="q-input" style="width:60%;" placeholder="Ta question..."> <button onclick="sendMsg('question')">POSER</button>
                 <div style="margin-top:10px;"><button onclick="sendMsg('Oui')" style="background:green; color:white;">OUI</button><button onclick="sendMsg('Non')" style="background:red; color:white;">NON</button></div>
-                <button onclick="enableGuessMode()" style="background: gold; width: 100%; margin-top:20px;">TENTER UN GUESS FINAL !</button>
+                <button id="btn-guess-mode" onclick="enableGuessMode()" style="background: gold; width: 100%; margin-top:20px;">TENTER UN GUESS FINAL !</button>
             </div>
             <div id="finish-guess" class="hidden">
                 <h2 id="guess-res-title">RÉSULTATS</h2>
                 <div id="guess-recap-box"></div>
                 <h3 id="guess-final-msg" style="color: gold; margin-top: 15px;"></h3>
-                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button>
+                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">QUITTER</button>
             </div>
         </div>
     </div>
@@ -244,6 +243,7 @@
 
         // --- GUESS LOGIC ---
         function updateUIGuess(d, pl) {
+            // Initialisation grille
             if(!document.getElementById('guess-grid').innerHTML && d.grid) {
                 fullGrid = d.grid;
                 d.grid.forEach(p => { 
@@ -251,11 +251,14 @@
                 });
             }
             
-            // On vérifie que les DEUX joueurs ont un secret != null
-            if(pl.length === 2 && pl.every(p => p.secret !== null)) {
+            // Gestion de l'attente synchrone pour le démarrage
+            const me = pl.find(p => p.name === user);
+            const bothReady = (pl.length === 2 && pl.every(p => p.secret !== null));
+
+            if (bothReady) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
-            } else if(isReadyGuess) {
+            } else if (me && me.secret !== null) {
                 document.getElementById('setup-msg').innerText = "Attente de l'adversaire...";
                 document.getElementById('btn-valider-guess').classList.add('hidden');
             }
@@ -269,8 +272,8 @@
 
         function clickGuess(id) {
             if(!isReadyGuess) { 
-                document.querySelectorAll('.poke-card').forEach(c => c.style.borderColor = "transparent"); 
-                document.getElementById('pc-'+id).style.borderColor = "gold"; 
+                document.querySelectorAll('.poke-card').forEach(c => c.classList.remove('selected-target')); 
+                document.getElementById('pc-'+id).classList.add('selected-target'); 
                 targetId = id; 
             } else if(amIGuessing) { 
                 sendFinalGuess(id); 
@@ -284,7 +287,7 @@
                 isReadyGuess = true; 
                 roomRef.child('p/' + user).update({ secret: targetId }); 
             } else {
-                alert("Choisis un Pokémon d'abord !");
+                alert("Choisis d'abord un Pokémon sur la grille !");
             }
         }
 
@@ -298,24 +301,24 @@
 
         function enableGuessMode() { 
             amIGuessing = true; 
-            alert("Clique maintenant sur le Pokémon de l'adversaire dans la grille !"); 
+            document.getElementById('btn-guess-mode').innerText = "CLIQUE SUR LE POKÉMON ADVERSE !";
+            document.getElementById('btn-guess-mode').style.background = "red";
         }
 
         async function sendFinalGuess(id) {
-            const snap = await roomRef.get();
+            const snap = await roomRef.once('value');
             const d = snap.val();
             const players = d.p;
-            const myName = user;
-            const oppKey = Object.keys(players).find(k => k !== myName);
+            const oppKey = Object.keys(players).find(k => k !== user);
             const opponent = players[oppKey];
 
             let win = (id === opponent.secret);
             
             roomRef.update({ 
                 finalResult: { 
-                    winner: win ? myName : opponent.name, 
-                    p1: myName, 
-                    p1Secret: players[myName].secret, 
+                    winner: win ? user : opponent.name, 
+                    p1: user, 
+                    p1Secret: players[user].secret, 
                     p2: opponent.name, 
                     p2Secret: opponent.secret 
                 } 
