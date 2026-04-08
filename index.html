@@ -15,8 +15,22 @@
         .stats-table td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; font-weight: bold; }
         .stat-bar { height: 12px; border-radius: 4px; display: inline-block; border: 1px solid #555; margin-left: 10px; vertical-align: middle; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; transition: 0.2s; }
-        .btn-stat { background: #333; color: white; border: 1px solid #555; width: 120px; }
+        
+        /* Boutons de stats */
+        .btn-stat { background: #333; color: white; border: 1px solid #555; width: 120px; height: 45px; font-size: 0.8em; }
         .btn-stat.selected { border: 2px solid gold; background: #443a10; }
+        
+        /* Effet de cadenas pour les stats utilisées */
+        .btn-stat.locked { 
+            background: #111 !important; 
+            color: #555 !important; 
+            border: 1px solid #222 !important; 
+            cursor: not-allowed; 
+            opacity: 0.6;
+            position: relative;
+        }
+        .btn-stat.locked::after { content: " 🔒"; }
+
         #timer { font-size: 2.5em; color: #ee1515; font-weight: bold; margin: 10px; text-shadow: 0 0 10px rgba(238,21,21,0.5); }
         .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .poke-card img { width: 100%; }
@@ -104,6 +118,7 @@
         document.getElementById('display-name').innerText = user;
 
         let room, host, mode = 'battle', roomRef, currentPoke, myTotal = 0, selectedStat = null, timerInt, currentRound = 0;
+        let usedStats = []; // Liste pour stocker les stats déjà utilisées
         let isReadyGuess = false, amIGuessing = false, targetId = null;
 
         function setMode(m) {
@@ -139,9 +154,7 @@
                     } else if(pl.length === 2 && pl.every(p => p.ready)) {
                         if(host) roomRef.update({ start: true });
                     }
-                } else {
-                    updateUIGuess(d);
-                }
+                } else { updateUIGuess(d); }
             });
         }
 
@@ -149,16 +162,6 @@
             const r = await fetch('https://pokeapi.co/api/v2/pokemon/' + (Math.floor(Math.random()*1025)+1));
             const p = await r.json();
             return { name: p.name.toUpperCase(), img: p.sprites.other['official-artwork'].front_default, stats: { hp:p.stats[0].base_stat, atk:p.stats[1].base_stat, def:p.stats[2].base_stat, spa:p.stats[3].base_stat, spd:p.stats[4].base_stat, spe:p.stats[5].base_stat } };
-        }
-
-        async function fetch30() {
-            let arr = [];
-            for(let i=0; i<30; i++) {
-                const r = await fetch('https://pokeapi.co/api/v2/pokemon/' + (Math.floor(Math.random()*1025)+1));
-                const p = await r.json();
-                arr.push({ id: p.id, name: p.name.toUpperCase(), img: p.sprites.other['official-artwork'].front_default });
-            }
-            return arr;
         }
 
         function resetInterfaceForNewRound(d) {
@@ -170,7 +173,16 @@
             document.getElementById('n-battle').innerText = d.poke.name;
             document.getElementById('i-battle').src = d.poke.img;
             document.getElementById('statut-battle').innerText = "Round " + d.round + "/6";
-            document.querySelectorAll('.btn-stat').forEach(b => b.classList.remove('selected'));
+            
+            // Mise à jour visuelle des boutons (Lock si utilisé)
+            document.querySelectorAll('.btn-stat').forEach(b => {
+                b.classList.remove('selected');
+                const statKey = b.id.replace('b-', '');
+                if(usedStats.includes(statKey)) {
+                    b.classList.add('locked');
+                    b.disabled = true;
+                }
+            });
             launchTimer();
         }
 
@@ -184,19 +196,29 @@
         }
 
         function selectStat(s) {
+            if(usedStats.includes(s)) return; // Protection si déjà utilisé
             selectedStat = s;
             document.querySelectorAll('.btn-stat').forEach(b => b.classList.remove('selected'));
             document.getElementById('b-' + s).classList.add('selected');
         }
 
         function sendChoice() {
+            // Si rien n'est choisi à la fin du timer, on prend la première stat dispo
+            if(!selectedStat) {
+                const keys = ['hp','atk','def','spa','spd','spe'];
+                selectedStat = keys.find(k => !usedStats.includes(k));
+            }
+            
             let val = selectedStat ? currentPoke.stats[selectedStat] : 0;
+            if(selectedStat) usedStats.push(selectedStat); // On verrouille la stat choisie
+            
             myTotal += val;
             roomRef.child('p/' + user).update({ val: val, total: myTotal });
             document.getElementById('combat-zone').classList.add('hidden');
             document.getElementById('lock-zone').classList.remove('hidden');
         }
 
+        // --- Reste du code (Résultats, Guess, etc) inchangé ---
         function showResultBattle(pl, d) {
             const table = document.getElementById('res-table'); table.innerHTML = "";
             ["hp","atk","def","spa","spd","spe"].forEach(k => {
@@ -213,7 +235,10 @@
             document.getElementById('res-battle').classList.add('hidden');
             const snap = await roomRef.get();
             const d = snap.val();
-            if(d.round >= 6) { alert("Match fini !"); location.reload(); } else {
+            if(d.round >= 6) { 
+                alert("Match fini ! Score : " + myTotal); 
+                location.reload(); 
+            } else {
                 await roomRef.child('p').once('value', s => s.forEach(c => c.ref.update({ val: -1 })));
                 roomRef.update({ round: d.round + 1, poke: await fetchPoke() });
             }
@@ -224,7 +249,16 @@
             document.getElementById('btn-ready-battle').innerText = "ATTENTE...";
         }
 
-        // --- GUESS LOGIC ---
+        async function fetch30() {
+            let arr = [];
+            for(let i=0; i<30; i++) {
+                const r = await fetch('https://pokeapi.co/api/v2/pokemon/' + (Math.floor(Math.random()*1025)+1));
+                const p = await r.json();
+                arr.push({ id: p.id, name: p.name.toUpperCase(), img: p.sprites.other['official-artwork'].front_default });
+            }
+            return arr;
+        }
+
         function updateUIGuess(d) {
             if(!document.getElementById('guess-grid').innerHTML && d.grid) {
                 d.grid.forEach(p => {
