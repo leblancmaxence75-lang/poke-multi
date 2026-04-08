@@ -81,9 +81,9 @@
         </div>
         <div class="box">
             <div id="setup-guess">
-                <h2 id="setup-title">Setup du Match</h2>
-                <p id="setup-msg">Choisis ton Pokémon cible sur la grille à gauche.</p>
-                <button id="btn-valider-guess" style="background:gold; padding: 15px; font-size: 1.1em;" onclick="readyGuess()">VALIDER MON POKÉMON</button>
+                <h2 id="setup-title">Choisis ton Pokémon</h2>
+                <p id="setup-msg">Clique sur un Pokémon dans la grille.</p>
+                <button id="btn-valider-guess" style="background:gold; padding: 15px;" onclick="readyGuess()">VALIDER MON CHOIX</button>
             </div>
             <div id="play-guess" class="hidden">
                 <div id="chat-zone"></div>
@@ -95,7 +95,7 @@
                 <h2 id="guess-res-title">RÉSULTATS</h2>
                 <div id="guess-recap-box"></div>
                 <h3 id="guess-final-msg" style="color: gold; margin-top: 15px;"></h3>
-                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">QUITTER LA PARTIE</button>
+                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button>
             </div>
         </div>
     </div>
@@ -251,14 +251,13 @@
                 });
             }
             
-            // On vérifie si les deux ont choisi un secret
-            const readyPlayers = pl.filter(p => p.secret !== null);
-            if(pl.length === 2 && readyPlayers.length === 2) {
+            // On vérifie que les DEUX joueurs ont un secret != null
+            if(pl.length === 2 && pl.every(p => p.secret !== null)) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
             } else if(isReadyGuess) {
                 document.getElementById('setup-msg').innerText = "Attente de l'adversaire...";
-                document.getElementById('btn-valider-guess').style.display = 'none';
+                document.getElementById('btn-valider-guess').classList.add('hidden');
             }
 
             if(d.messages) {
@@ -285,7 +284,7 @@
                 isReadyGuess = true; 
                 roomRef.child('p/' + user).update({ secret: targetId }); 
             } else {
-                alert("Choisis d'abord un Pokémon sur la grille !");
+                alert("Choisis un Pokémon d'abord !");
             }
         }
 
@@ -299,25 +298,50 @@
 
         function enableGuessMode() { 
             amIGuessing = true; 
-            alert("Mode GUESS activé ! Clique sur le Pokémon que tu penses être celui de l'adversaire."); 
+            alert("Clique maintenant sur le Pokémon de l'adversaire dans la grille !"); 
         }
 
         async function sendFinalGuess(id) {
-            const snap = await roomRef.get(); const d = snap.val();
-            let oppKey = Object.keys(d.p).find(k => k !== user);
-            let win = (id === d.p[oppKey].secret);
-            roomRef.update({ finalResult: { winner: win ? user : d.p[oppKey].name, p1: user, p1Secret: d.p[user].secret, p2: d.p[oppKey].name, p2Secret: d.p[oppKey].secret } });
+            const snap = await roomRef.get();
+            const d = snap.val();
+            const players = d.p;
+            const myName = user;
+            const oppKey = Object.keys(players).find(k => k !== myName);
+            const opponent = players[oppKey];
+
+            let win = (id === opponent.secret);
+            
+            roomRef.update({ 
+                finalResult: { 
+                    winner: win ? myName : opponent.name, 
+                    p1: myName, 
+                    p1Secret: players[myName].secret, 
+                    p2: opponent.name, 
+                    p2Secret: opponent.secret 
+                } 
+            });
         }
 
         function showFinalGuessUI(res) {
             document.getElementById('play-guess').classList.add('hidden');
             document.getElementById('finish-guess').classList.remove('hidden');
+            
             const p1Data = fullGrid.find(p => p.id === res.finalResult.p1Secret);
             const p2Data = fullGrid.find(p => p.id === res.finalResult.p2Secret);
+            
             document.getElementById('guess-recap-box').innerHTML = `
-                <div style="display:flex; justify-content:space-around;">
-                    <div><p>${res.finalResult.p1}</p><img src="${p1Data.img}" class="res-img"><br><small>${p1Data.name}</small></div>
-                    <div><p>${res.finalResult.p2}</p><img src="${p2Data.img}" class="res-img"><br><small>${p2Data.name}</small></div>
+                <div style="display:flex; justify-content:space-around; align-items:center;">
+                    <div class="final-panel" style="width:40%">
+                        <p>${res.finalResult.p1}</p>
+                        <img src="${p1Data.img}" style="width:100%">
+                        <p class="gold-txt">${p1Data.name}</p>
+                    </div>
+                    <h2 style="color:red">VS</h2>
+                    <div class="final-panel" style="width:40%">
+                        <p>${res.finalResult.p2}</p>
+                        <img src="${p2Data.img}" style="width:100%">
+                        <p class="gold-txt">${p2Data.name}</p>
+                    </div>
                 </div>`;
             document.getElementById('guess-final-msg').innerText = "🏆 VICTOIRE DE : " + res.finalResult.winner;
         }
