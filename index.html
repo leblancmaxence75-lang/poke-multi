@@ -81,8 +81,9 @@
         </div>
         <div class="box">
             <div id="setup-guess">
-                <p id="setup-msg">Choisis ton Pokémon cible :</p>
-                <button id="btn-valider-guess" style="background:gold;" onclick="readyGuess()">VALIDER MON CHOIX</button>
+                <h2 id="setup-title">Setup du Match</h2>
+                <p id="setup-msg">Choisis ton Pokémon cible sur la grille à gauche.</p>
+                <button id="btn-valider-guess" style="background:gold; padding: 15px; font-size: 1.1em;" onclick="readyGuess()">VALIDER MON POKÉMON</button>
             </div>
             <div id="play-guess" class="hidden">
                 <div id="chat-zone"></div>
@@ -155,6 +156,17 @@
             return { name: p.name.toUpperCase(), img: p.sprites.other['official-artwork'].front_default, stats: { hp:p.stats[0].base_stat, atk:p.stats[1].base_stat, def:p.stats[2].base_stat, spa:p.stats[3].base_stat, spd:p.stats[4].base_stat, spe:p.stats[5].base_stat } };
         }
 
+        async function fetch30() {
+            let arr = [];
+            for(let i=0; i<30; i++) {
+                const r = await fetch('https://pokeapi.co/api/v2/pokemon/' + (Math.floor(Math.random()*1025)+1));
+                const p = await r.json();
+                arr.push({ id: p.id, name: p.name.toUpperCase(), img: p.sprites.other['official-artwork'].front_default });
+            }
+            return arr;
+        }
+
+        // --- BATTLE LOGIC ---
         function resetInterfaceForNewRound(d) {
             currentPoke = d.poke; selectedStat = null;
             document.getElementById('ready-zone-battle').classList.add('hidden');
@@ -185,7 +197,7 @@
 
         function sendChoice() {
             if(!selectedStat) selectedStat = ['hp','atk','def','spa','spd','spe'].find(k => !usedStats.includes(k));
-            let val = currentPoke.stats[selectedStat];
+            let val = currentPoke.stats[selectedStat] || 0;
             usedStats.push(selectedStat); myTotal += val;
             myHistory.push({ statName: selectedStat.toUpperCase(), value: val });
             roomRef.child('p/' + user).update({ val: val, total: myTotal, history: myHistory });
@@ -231,28 +243,24 @@
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); document.getElementById('btn-ready-battle').innerText = "ATTENTE..."; }
 
         // --- GUESS LOGIC ---
-        async function fetch30() {
-            let arr = [];
-            for(let i=0; i<30; i++) {
-                const r = await fetch('https://pokeapi.co/api/v2/pokemon/' + (Math.floor(Math.random()*1025)+1));
-                const p = await r.json();
-                arr.push({ id: p.id, name: p.name.toUpperCase(), img: p.sprites.other['official-artwork'].front_default });
-            }
-            return arr;
-        }
-
         function updateUIGuess(d, pl) {
             if(!document.getElementById('guess-grid').innerHTML && d.grid) {
                 fullGrid = d.grid;
-                d.grid.forEach(p => { document.getElementById('guess-grid').innerHTML += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; });
+                d.grid.forEach(p => { 
+                    document.getElementById('guess-grid').innerHTML += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; 
+                });
             }
-            if(pl.length === 2 && pl.every(p => p.secret !== null)) {
+            
+            // On vérifie si les deux ont choisi un secret
+            const readyPlayers = pl.filter(p => p.secret !== null);
+            if(pl.length === 2 && readyPlayers.length === 2) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
             } else if(isReadyGuess) {
                 document.getElementById('setup-msg').innerText = "Attente de l'adversaire...";
-                document.getElementById('btn-valider-guess').classList.add('hidden');
+                document.getElementById('btn-valider-guess').style.display = 'none';
             }
+
             if(d.messages) {
                 const z = document.getElementById('chat-zone'); z.innerHTML = "";
                 Object.values(d.messages).forEach(m => z.innerHTML += `<div><b>${m.u}:</b> ${m.t}</div>`);
@@ -261,16 +269,38 @@
         }
 
         function clickGuess(id) {
-            if(!isReadyGuess) { document.querySelectorAll('.poke-card').forEach(c => c.style.borderColor = "transparent"); document.getElementById('pc-'+id).style.borderColor = "gold"; targetId = id; }
-            else if(amIGuessing) { sendFinalGuess(id); }
-            else { document.getElementById('pc-'+id).classList.toggle('gray'); }
+            if(!isReadyGuess) { 
+                document.querySelectorAll('.poke-card').forEach(c => c.style.borderColor = "transparent"); 
+                document.getElementById('pc-'+id).style.borderColor = "gold"; 
+                targetId = id; 
+            } else if(amIGuessing) { 
+                sendFinalGuess(id); 
+            } else { 
+                document.getElementById('pc-'+id).classList.toggle('gray'); 
+            }
         }
 
-        function readyGuess() { if(targetId) { isReadyGuess = true; roomRef.child('p/' + user).update({ secret: targetId }); } }
+        function readyGuess() { 
+            if(targetId) { 
+                isReadyGuess = true; 
+                roomRef.child('p/' + user).update({ secret: targetId }); 
+            } else {
+                alert("Choisis d'abord un Pokémon sur la grille !");
+            }
+        }
 
-        function sendMsg(t) { let txt = t === 'question' ? document.getElementById('q-input').value : t; if(txt) { roomRef.child('messages').push({ u: user, t: txt }); document.getElementById('q-input').value = ""; } }
+        function sendMsg(t) { 
+            let txt = t === 'question' ? document.getElementById('q-input').value : t; 
+            if(txt) { 
+                roomRef.child('messages').push({ u: user, t: txt }); 
+                document.getElementById('q-input').value = ""; 
+            } 
+        }
 
-        function enableGuessMode() { amIGuessing = true; alert("Choisis le Pokémon de l'adversaire sur la grille !"); }
+        function enableGuessMode() { 
+            amIGuessing = true; 
+            alert("Mode GUESS activé ! Clique sur le Pokémon que tu penses être celui de l'adversaire."); 
+        }
 
         async function sendFinalGuess(id) {
             const snap = await roomRef.get(); const d = snap.val();
