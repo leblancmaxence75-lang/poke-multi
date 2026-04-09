@@ -12,13 +12,13 @@
         .gold-txt { color: gold; font-weight: bold; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; transition: 0.2s; }
         
-        /* Styles Poké-Battle */
+        /* Poké-Battle (Locké) */
         .btn-stat { background: #333; color: white; width: 120px; height: 45px; border: 1px solid #555; }
         .btn-stat.selected { border: 2px solid gold; background: #443a10; }
         .btn-stat:disabled { opacity: 0.3; cursor: not-allowed; }
         #timer { font-size: 2.5em; color: #ee1515; font-weight: bold; }
 
-        /* Styles Qui est-ce */
+        /* Qui est-ce */
         .grid-container { width: 480px; }
         .guess-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
         .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
@@ -77,14 +77,12 @@
     </div>
 
     <div id="game-guess" class="hidden">
-        <div class="box grid-container">
-            <div id="guess-grid" class="guess-grid"></div>
-        </div>
+        <div class="box grid-container"><div id="guess-grid" class="guess-grid"></div></div>
         <div class="box">
             <div id="wait-players-guess" class="status-bar">Attente des choix...</div>
             <div id="setup-guess">
                 <h3>CHOISIS TON POKÉMON</h3>
-                <p>Clique sur un Pokémon puis valide.</p>
+                <p>Clique sur un Pokémon de la grille puis valide.</p>
                 <button id="btn-confirm-secret" style="background:gold; width:100%; padding:15px;" onclick="confirmSecret()">VALIDER (PRÊT)</button>
             </div>
             <div id="play-guess" class="hidden">
@@ -97,7 +95,7 @@
                 </div>
                 <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
                 <button id="btn-toggle-guess" onclick="enableGuessMode()" style="background: gold; width: 100%;">TENTER UN GUESS FINAL !</button>
-                <button id="btn-submit-guess" class="hidden" onclick="sendFinalGuess()" style="background: #00ff00; color:black; width: 100%;">VALIDER LE GUESS</button>
+                <button id="btn-submit-guess" class="hidden" onclick="sendFinalGuess()" style="background: #00ff00; color:black; width: 100%;">VALIDER MON GUESS</button>
             </div>
             <div id="finish-guess" class="hidden">
                 <div id="guess-recap-box"></div>
@@ -173,7 +171,7 @@
             return arr;
         }
 
-        // --- BATTLE ---
+        // --- BATTLE (LOCKÉ) ---
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); }
         function resetBattleRound(d) {
             currentPoke = d.poke; selectedStat = null;
@@ -222,7 +220,7 @@
             document.getElementById('ovw').innerText = "GAGNANT : " + win;
         }
 
-        // --- QUI EST-CE (SYNC & GRID FIX) ---
+        // --- QUI EST-CE (GRID SYNC) ---
         function handleGuessSync(d, pl) {
             if(!document.getElementById('guess-grid').innerHTML && d.grid) {
                 fullGrid = d.grid;
@@ -258,7 +256,7 @@
             if(!tempSecretId) return alert("Choisis un Pokémon !");
             isSecretLocked = true;
             roomRef.child('p/' + user).update({ secret: tempSecretId });
-            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé !</p>`;
+            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente...</p>`;
         }
 
         function enableGuessMode() {
