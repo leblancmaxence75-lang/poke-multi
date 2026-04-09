@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Poké-Multi Games V6</title>
+    <title>Poké-Multi Games V7</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -82,7 +82,7 @@
             <div id="wait-players-guess" class="status-bar">Prêts : 0/2</div>
             <div id="setup-guess">
                 <h3>CHOISIS TON POKÉMON</h3>
-                <p>Sélectionne un Pokémon puis clique sur VALIDER.</p>
+                <p>Clique sur un Pokémon puis sur VALIDER.</p>
                 <button id="btn-confirm-secret" style="background:gold; width:100%; padding:15px;" onclick="confirmSecret()">VALIDER (PRÊT)</button>
             </div>
             <div id="play-guess" class="hidden">
@@ -171,7 +171,7 @@
             return arr;
         }
 
-        // BATTLE (LOCKÉ)
+        // --- BATTLE (STRICTEMENT INCHANGÉ) ---
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); }
         function resetBattleRound(d) {
             currentPoke = d.poke; selectedStat = null;
@@ -220,23 +220,34 @@
             document.getElementById('ovw').innerText = "GAGNANT : " + win;
         }
 
-        // QUI EST-CE (SYNC & GRID FIX)
+        // --- QUI EST-CE (SYNC ANALYSÉE ET STABILISÉE) ---
         function handleGuessSync(d, pl) {
             if(!d.grid) return;
-            if(!document.getElementById('guess-grid').innerHTML) {
+            
+            // On s'assure que la grille n'est générée qu'une fois et qu'elle vient bien de Firebase
+            if(!fullGrid.length || document.getElementById('guess-grid').innerHTML === "") {
                 fullGrid = d.grid;
-                document.getElementById('guess-grid').innerHTML = "";
+                let html = "";
                 d.grid.forEach(p => { 
-                    document.getElementById('guess-grid').innerHTML += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; 
+                    html += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; 
                 });
+                document.getElementById('guess-grid').innerHTML = html;
             }
-            const pWithSecret = pl.filter(p => p.secret !== null);
+
+            const pWithSecret = pl.filter(p => p.secret !== null && p.secret !== undefined);
             document.getElementById('wait-players-guess').innerText = `Prêts : ${pWithSecret.length}/2`;
+            
+            // LA CONDITION CRUCIALE : On ne cache l'écran de choix que si les DEUX secrets existent
             if(pl.length === 2 && pWithSecret.length === 2) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('wait-players-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
+            } else {
+                // Tant que les deux ne sont pas là, on reste sur l'écran de sélection
+                document.getElementById('setup-guess').classList.remove('hidden');
+                document.getElementById('play-guess').classList.add('hidden');
             }
+
             if(d.messages) {
                 document.getElementById('chat-zone').innerHTML = Object.values(d.messages).map(m => `<div><b>${m.u}:</b> ${m.t}</div>`).join('');
                 document.getElementById('chat-zone').scrollTop = 9999;
