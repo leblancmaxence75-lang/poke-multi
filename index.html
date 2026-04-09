@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Poké-Multi Games V5</title>
+    <title>Poké-Multi Games V6</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -20,7 +20,7 @@
 
         /* Qui est-ce */
         .grid-container { width: 480px; }
-        .guess-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .guess-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; min-height: 200px; }
         .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .poke-card img { width: 100%; pointer-events: none; }
         .poke-card.selected-secret { border-color: #00ff00 !important; background: #0a2e0a; }
@@ -79,10 +79,10 @@
     <div id="game-guess" class="hidden">
         <div class="box grid-container"><div id="guess-grid" class="guess-grid"></div></div>
         <div class="box">
-            <div id="wait-players-guess" class="status-bar">Attente des choix...</div>
+            <div id="wait-players-guess" class="status-bar">Prêts : 0/2</div>
             <div id="setup-guess">
                 <h3>CHOISIS TON POKÉMON</h3>
-                <p>Clique sur un Pokémon de la grille puis valide.</p>
+                <p>Sélectionne un Pokémon puis clique sur VALIDER.</p>
                 <button id="btn-confirm-secret" style="background:gold; width:100%; padding:15px;" onclick="confirmSecret()">VALIDER (PRÊT)</button>
             </div>
             <div id="play-guess" class="hidden">
@@ -171,7 +171,7 @@
             return arr;
         }
 
-        // --- BATTLE (LOCKÉ) ---
+        // BATTLE (LOCKÉ)
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); }
         function resetBattleRound(d) {
             currentPoke = d.poke; selectedStat = null;
@@ -220,17 +220,19 @@
             document.getElementById('ovw').innerText = "GAGNANT : " + win;
         }
 
-        // --- QUI EST-CE (GRID SYNC) ---
+        // QUI EST-CE (SYNC & GRID FIX)
         function handleGuessSync(d, pl) {
-            if(!document.getElementById('guess-grid').innerHTML && d.grid) {
+            if(!d.grid) return;
+            if(!document.getElementById('guess-grid').innerHTML) {
                 fullGrid = d.grid;
+                document.getElementById('guess-grid').innerHTML = "";
                 d.grid.forEach(p => { 
                     document.getElementById('guess-grid').innerHTML += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; 
                 });
             }
-            const pReady = pl.filter(p => p.secret !== null);
-            document.getElementById('wait-players-guess').innerText = `Prêts : ${pReady.length}/2`;
-            if(pl.length === 2 && pReady.length === 2) {
+            const pWithSecret = pl.filter(p => p.secret !== null);
+            document.getElementById('wait-players-guess').innerText = `Prêts : ${pWithSecret.length}/2`;
+            if(pl.length === 2 && pWithSecret.length === 2) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('wait-players-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
@@ -256,7 +258,7 @@
             if(!tempSecretId) return alert("Choisis un Pokémon !");
             isSecretLocked = true;
             roomRef.child('p/' + user).update({ secret: tempSecretId });
-            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente...</p>`;
+            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente de l'adversaire...</p>`;
         }
 
         function enableGuessMode() {
