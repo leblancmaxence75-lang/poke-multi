@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Poké-Multi Games Full</title>
+    <title>Poké-Multi Games V4</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -12,19 +12,22 @@
         .gold-txt { color: gold; font-weight: bold; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; transition: 0.2s; }
         
-        /* Battle Styles */
+        /* Styles Poké-Battle (INCHANGÉS) */
         .btn-stat { background: #333; color: white; width: 120px; height: 45px; border: 1px solid #555; }
         .btn-stat.selected { border: 2px solid gold; background: #443a10; }
         .btn-stat:disabled { opacity: 0.3; cursor: not-allowed; }
         #timer { font-size: 2.5em; color: #ee1515; font-weight: bold; }
 
-        /* Guess Styles */
-        .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+        /* Styles Qui est-ce */
+        .grid-container { width: 480px; }
+        .guess-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: 0.1s; }
         .poke-card img { width: 100%; pointer-events: none; }
+        .poke-card.selected-secret { border-color: #00ff00 !important; background: #0a2e0a; }
         .poke-card.gray { filter: grayscale(100%); opacity: 0.2; }
-        .poke-card.target { border-color: gold !important; background: #443a10; }
-        #chat-zone { background: #111; height: 120px; overflow-y: auto; padding: 10px; text-align: left; border-radius: 10px; border: 1px solid #444; margin: 10px 0; }
+        .poke-card.guess-target { border-color: gold !important; background: #443a10; }
         
+        #chat-zone { background: #111; height: 120px; overflow-y: auto; padding: 10px; text-align: left; border-radius: 10px; border: 1px solid #444; margin: 10px 0; }
         .status-bar { background: #000; padding: 10px; border-radius: 10px; margin-bottom: 10px; color: gold; font-weight: bold; border: 1px solid gold; }
         .final-panel { background: #252525; border: 2px solid gold; padding: 15px; border-radius: 15px; margin-top: 10px; }
     </style>
@@ -77,30 +80,35 @@
     </div>
 
     <div id="game-guess" class="hidden">
-        <div class="box" style="width: 480px;">
-            <div id="guess-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;"></div>
+        <div class="box grid-container">
+            <div id="guess-grid" class="guess-grid"></div>
         </div>
         <div class="box">
-            <div id="wait-players-guess" class="status-bar">Attente : 0/2</div>
+            <div id="wait-players-guess" class="status-bar">Prêts : 0/2</div>
+            
             <div id="setup-guess">
-                <h3>Choisis ton Pokémon secret</h3>
-                <p id="setup-info">Clique sur une carte à gauche.</p>
-                <button id="btn-confirm-secret" style="background:gold; width:100%; padding:10px;" onclick="confirmSecret()">VALIDER</button>
+                <h3>SÉLECTION DU POKÉMON</h3>
+                <p>1. Clique sur un Pokémon dans la grille.<br>2. Appuie sur PRÊT quand ton choix est fait.</p>
+                <button id="btn-confirm-secret" style="background:gold; width:100%; padding:15px; font-size:1.2em;" onclick="confirmSecret()">VALIDER (PRÊT)</button>
             </div>
+
             <div id="play-guess" class="hidden">
                 <div id="chat-zone"></div>
-                <input type="text" id="q-input" style="width:50%;" placeholder="Question..."> 
+                <input type="text" id="q-input" style="width:50%;" placeholder="Ta question..."> 
                 <button onclick="sendMsg('question')">POSER</button>
                 <div style="margin-top:5px;">
                     <button onclick="sendMsg('OUI')" style="background:green; color:white;">OUI</button>
                     <button onclick="sendMsg('NON')" style="background:red; color:white;">NON</button>
                 </div>
-                <button id="btn-guess-mode" onclick="toggleGuessMode()" style="background: gold; width: 100%; margin-top:15px;">TENTER LE GUESS FINAL !</button>
+                <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
+                <button id="btn-toggle-guess" onclick="enableGuessMode()" style="background: gold; width: 100%;">TENTER UN GUESS FINAL !</button>
+                <button id="btn-submit-guess" class="hidden" onclick="sendFinalGuess()" style="background: #00ff00; color:black; width: 100%;">VALIDER LE GUESS</button>
             </div>
+
             <div id="finish-guess" class="hidden">
                 <div id="guess-recap-box"></div>
                 <h2 id="guess-final-msg" style="color: gold;"></h2>
-                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR</button>
+                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button>
             </div>
         </div>
     </div>
@@ -116,7 +124,7 @@
 
         let room, host, mode = 'battle', roomRef, timerInt, currentRound = 0;
         let usedStats = [], myTotal = 0, currentPoke = null, selectedStat = null, myHistory = [];
-        let targetSecretId = null, isSecretConfirmed = false, amIGuessing = false, fullGrid = [];
+        let tempSecretId = null, isSecretLocked = false, isGuessMode = false, guessTargetId = null, fullGrid = [];
 
         function setMode(m) {
             mode = m;
@@ -153,7 +161,7 @@
                     } else if(pl.length === 2 && pl.every(p => p.ready)) { if(host) roomRef.update({ start: true }); }
                 } else {
                     if(d.finalResult) showFinalGuessUI(d.finalResult);
-                    else handleGuessLogic(d, pl);
+                    else handleGuessSync(d, pl);
                 }
             });
         }
@@ -174,9 +182,8 @@
             return arr;
         }
 
-        // --- BATTLE ---
+        // --- POKÉ-BATTLE (LOGIQUE INTACTE) ---
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); document.getElementById('btn-ready-battle').innerText = "Attente..."; }
-
         function resetBattleRound(d) {
             currentPoke = d.poke; selectedStat = null;
             document.getElementById('ready-zone-battle').classList.add('hidden');
@@ -191,14 +198,11 @@
             });
             startTimer();
         }
-
         function startTimer() {
             clearInterval(timerInt); let s = 5; document.getElementById('timer').innerText = s;
             timerInt = setInterval(() => { s--; document.getElementById('timer').innerText = s; if(s<=0) { clearInterval(timerInt); submitBattleChoice(); } }, 1000);
         }
-
         function selectStat(s) { selectedStat = s; document.querySelectorAll('.btn-stat').forEach(b => b.classList.remove('selected')); document.getElementById('b-'+s).classList.add('selected'); }
-
         function submitBattleChoice() {
             if(!selectedStat) selectedStat = ['hp','atk','def','spa','spd','spe'].find(k => !usedStats.includes(k));
             let val = currentPoke.stats[selectedStat];
@@ -208,14 +212,12 @@
             document.getElementById('combat-zone').classList.add('hidden');
             document.getElementById('statut-battle').innerText = "Validé !";
         }
-
         function showResultRound(pl, d) {
             document.getElementById('res-battle').classList.remove('hidden');
             let win = pl[0].val > pl[1].val ? pl[0].name : (pl[1].val > pl[0].val ? pl[1].name : "Égalité");
             document.getElementById('win-round').innerText = "Vainqueur : " + win;
             if(host) document.getElementById('next-btn').style.display = "block";
         }
-
         async function nextRound() {
             const snap = await roomRef.once('value'); const d = snap.val();
             if(d.round >= 6) roomRef.update({ battleOver: true });
@@ -224,7 +226,6 @@
                 roomRef.update({ round: d.round + 1, poke: await fetchPoke() });
             }
         }
-
         function showFinalBattleUI(pl) {
             document.getElementById('game-battle').innerHTML = `<div class="box"><h2>FIN DU COMBAT</h2><div id="rcp"></div><h1 id="ovw"></h1><button onclick="location.reload()">MENU</button></div>`;
             pl.forEach(p => {
@@ -237,14 +238,17 @@
             document.getElementById('ovw').innerText = "GAGNANT : " + win;
         }
 
-        // --- GUESS ---
-        function handleGuessLogic(d, pl) {
+        // --- QUI EST-CE (LOGIQUE REFAITE) ---
+        function handleGuessSync(d, pl) {
             if(!document.getElementById('guess-grid').innerHTML && d.grid) {
                 fullGrid = d.grid;
-                d.grid.forEach(p => { document.getElementById('guess-grid').innerHTML += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; });
+                d.grid.forEach(p => { 
+                    document.getElementById('guess-grid').innerHTML += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; 
+                });
             }
             const readyCount = pl.filter(p => p.secret !== null).length;
             document.getElementById('wait-players-guess').innerText = `Prêts : ${readyCount}/2`;
+            
             if(pl.length === 2 && readyCount === 2) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('wait-players-guess').classList.add('hidden');
@@ -257,42 +261,61 @@
         }
 
         function clickGuess(id) {
-            if(!isSecretConfirmed) {
-                document.querySelectorAll('.poke-card').forEach(c => c.classList.remove('target'));
-                document.getElementById('pc-'+id).classList.add('target');
-                targetSecretId = id;
-            } else if(amIGuessing) {
-                submitFinalGuess(id);
+            const card = document.getElementById('pc-'+id);
+            if(!isSecretLocked) {
+                // Phase de sélection
+                document.querySelectorAll('.poke-card').forEach(c => c.classList.remove('selected-secret'));
+                card.classList.add('selected-secret');
+                tempSecretId = id;
+            } else if(isGuessMode) {
+                // Phase de Guess Final
+                document.querySelectorAll('.poke-card').forEach(c => c.classList.remove('guess-target'));
+                card.classList.add('guess-target');
+                guessTargetId = id;
             } else {
-                document.getElementById('pc-'+id).classList.toggle('gray');
+                // Phase de Jeu (système de gris)
+                card.classList.toggle('gray');
             }
         }
 
         function confirmSecret() {
-            if(!targetSecretId) return alert("Choisis un Pokémon !");
-            isSecretConfirmed = true;
-            roomRef.child('p/' + user).update({ secret: targetSecretId });
-            document.getElementById('btn-confirm-secret').classList.add('hidden');
-            document.getElementById('setup-info').innerText = "Attente de l'autre joueur...";
+            if(!tempSecretId) return alert("Clique sur un Pokémon d'abord !");
+            isSecretLocked = true;
+            roomRef.child('p/' + user).update({ secret: tempSecretId });
+            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Choix envoyé ! En attente de l'adversaire...</p>`;
         }
 
-        function toggleGuessMode() {
-            amIGuessing = !amIGuessing;
-            document.getElementById('btn-guess-mode').style.background = amIGuessing ? "red" : "gold";
-            document.getElementById('btn-guess-mode').innerText = amIGuessing ? "CLIQUE SUR LE POKÉMON ADVERSE" : "GUESS FINAL !";
+        function enableGuessMode() {
+            isGuessMode = true;
+            document.getElementById('btn-toggle-guess').classList.add('hidden');
+            document.getElementById('btn-submit-guess').classList.remove('hidden');
+            alert("Clique sur le Pokémon que tu penses être celui de l'adversaire, puis valide.");
         }
 
-        async function submitFinalGuess(id) {
+        async function sendFinalGuess() {
+            if(!guessTargetId) return alert("Choisis un Pokémon à deviner !");
             const snap = await roomRef.once('value'); const d = snap.val();
             const oppKey = Object.keys(d.p).find(k => k !== user);
-            const win = (id === d.p[oppKey].secret);
-            roomRef.update({ finalResult: { winner: win ? user : d.p[oppKey].name, p1: user, p1S: d.p[user].secret, p2: d.p[oppKey].name, p2S: d.p[oppKey].secret } });
+            const opponent = d.p[oppKey];
+            const isWin = (guessTargetId === opponent.secret);
+            
+            roomRef.update({
+                finalResult: {
+                    winner: isWin ? user : opponent.name,
+                    p1: user, p1S: d.p[user].secret,
+                    p2: opponent.name, p2S: opponent.secret
+                }
+            });
         }
 
         function showFinalGuessUI(res) {
-            document.getElementById('game-guess').innerHTML = `<div class="box"><h2>RÉSULTATS</h2><div id="gres" style="display:flex; justify-content:space-around;"></div><h1 id="gwin" style="color:gold"></h1><button onclick="location.reload()">MENU</button></div>`;
-            const c1 = fullGrid.find(x => x.id === res.p1S); const c2 = fullGrid.find(x => x.id === res.p2S);
-            document.getElementById('gres').innerHTML = `<div><p>${res.p1}</p><img src="${c1.img}" width="100"><p>${c1.name}</p></div><div><p>${res.p2}</p><img src="${c2.img}" width="100"><p>${c2.name}</p></div>`;
+            document.getElementById('game-guess').innerHTML = `<div class="box"><h2>RÉVÉLATION</h2><div id="gres" style="display:flex; justify-content:space-around; align-items:center;"></div><h1 id="gwin" style="background:gold; color:black; padding:10px; border-radius:10px;"></h1><button onclick="location.reload()">RETOUR</button></div>`;
+            const c1 = fullGrid.find(x => x.id === res.p1S);
+            const c2 = fullGrid.find(x => x.id === res.p2S);
+            document.getElementById('gres').innerHTML = `
+                <div class="final-panel"><b>${res.p1}</b><br><img src="${c1.img}" width="100"><br>${c1.name}</div>
+                <div style="font-size:2em">VS</div>
+                <div class="final-panel"><b>${res.p2}</b><br><img src="${c2.img}" width="100"><br>${c2.name}</div>`;
             document.getElementById('gwin').innerText = "GAGNANT : " + res.winner;
         }
 
