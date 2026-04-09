@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Poké-Multi Games V7</title>
+    <title>Poké-Multi Games V8</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -98,9 +98,9 @@
                 <button id="btn-submit-guess" class="hidden" onclick="sendFinalGuess()" style="background: #00ff00; color:black; width: 100%;">VALIDER MON GUESS</button>
             </div>
             <div id="finish-guess" class="hidden">
-                <div id="guess-recap-box"></div>
+                <div id="guess-recap-box" style="display: flex; justify-content: space-around; margin-bottom: 10px;"></div>
                 <h2 id="guess-final-msg" style="color: gold;"></h2>
-                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">MENU</button>
+                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button>
             </div>
         </div>
     </div>
@@ -171,7 +171,7 @@
             return arr;
         }
 
-        // --- BATTLE (STRICTEMENT INCHANGÉ) ---
+        // --- BATTLE (LOCKÉ) ---
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); }
         function resetBattleRound(d) {
             currentPoke = d.poke; selectedStat = null;
@@ -220,11 +220,10 @@
             document.getElementById('ovw').innerText = "GAGNANT : " + win;
         }
 
-        // --- QUI EST-CE (SYNC ANALYSÉE ET STABILISÉE) ---
+        // --- QUI EST-CE (SYNC & REVEAL FIX) ---
         function handleGuessSync(d, pl) {
             if(!d.grid) return;
             
-            // On s'assure que la grille n'est générée qu'une fois et qu'elle vient bien de Firebase
             if(!fullGrid.length || document.getElementById('guess-grid').innerHTML === "") {
                 fullGrid = d.grid;
                 let html = "";
@@ -237,13 +236,11 @@
             const pWithSecret = pl.filter(p => p.secret !== null && p.secret !== undefined);
             document.getElementById('wait-players-guess').innerText = `Prêts : ${pWithSecret.length}/2`;
             
-            // LA CONDITION CRUCIALE : On ne cache l'écran de choix que si les DEUX secrets existent
             if(pl.length === 2 && pWithSecret.length === 2) {
                 document.getElementById('setup-guess').classList.add('hidden');
                 document.getElementById('wait-players-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
             } else {
-                // Tant que les deux ne sont pas là, on reste sur l'écran de sélection
                 document.getElementById('setup-guess').classList.remove('hidden');
                 document.getElementById('play-guess').classList.add('hidden');
             }
@@ -269,7 +266,7 @@
             if(!tempSecretId) return alert("Choisis un Pokémon !");
             isSecretLocked = true;
             roomRef.child('p/' + user).update({ secret: tempSecretId });
-            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente de l'adversaire...</p>`;
+            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente...</p>`;
         }
 
         function enableGuessMode() {
@@ -283,14 +280,20 @@
             const snap = await roomRef.once('value'); const d = snap.val();
             const opponent = Object.values(d.p).find(p => p.name !== user);
             const win = (guessTargetId === opponent.secret);
-            roomRef.update({ finalResult: { winner: win ? user : opponent.name, p1: user, p1S: d.p[user].secret, p2: opponent.name, p2S: opponent.secret } });
+            roomRef.update({ finalResult: { guesser: user, winner: win ? user : opponent.name, isSuccess: win, p1: user, p1S: d.p[user].secret, p2: opponent.name, p2S: opponent.secret } });
         }
 
         function showFinalGuessUI(res) {
-            document.getElementById('game-guess').innerHTML = `<div class="box"><h2>REVEAL</h2><div id="gres" style="display:flex; justify-content:space-around;"></div><h1 id="gwin" style="background:gold; color:black; padding:10px;"></h1><button onclick="location.reload()">MENU</button></div>`;
+            document.getElementById('game-guess').innerHTML = `<div class="box"><h2>RÉVÉLATION FINALE</h2><div id="gres" style="display:flex; justify-content:space-around;"></div><h2 id="guess-status" style="margin-top:10px;"></h2><h1 id="gwin" style="background:gold; color:black; padding:10px; border-radius:10px;"></h1><button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button></div>`;
             const c1 = fullGrid.find(x => x.id === res.p1S); const c2 = fullGrid.find(x => x.id === res.p2S);
-            document.getElementById('gres').innerHTML = `<div class="final-panel"><b>${res.p1}</b><br><img src="${c1.img}" width="100"><br>${c1.name}</div><div class="final-panel"><b>${res.p2}</b><br><img src="${c2.img}" width="100"><br>${c2.name}</div>`;
-            document.getElementById('gwin').innerText = "GAGNANT : " + res.winner;
+            document.getElementById('gres').innerHTML = `
+                <div class="final-panel"><b>${res.p1}</b><br><img src="${c1.img}" width="100"><br>${c1.name}</div>
+                <div class="final-panel"><b>${res.p2}</b><br><img src="${c2.img}" width="100"><br>${c2.name}</div>`;
+            
+            const statusTxt = res.isSuccess ? `✅ LE GUESS DE ${res.guesser.toUpperCase()} ÉTAIT BON !` : `❌ LE GUESS DE ${res.guesser.toUpperCase()} ÉTAIT FAUX !`;
+            document.getElementById('guess-status').innerText = statusTxt;
+            document.getElementById('guess-status').style.color = res.isSuccess ? "#00ff00" : "#ff0000";
+            document.getElementById('gwin').innerText = "VAINQUEUR : " + res.winner;
         }
 
         function sendMsg(type) {
