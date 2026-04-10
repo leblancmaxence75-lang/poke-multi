@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Poké-Multi Games V8 - Edition Vegechou</title>
+    <title>Poké-Multi Games V8</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -12,13 +12,16 @@
         .gold-txt { color: gold; font-weight: bold; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; transition: 0.2s; }
         
+        /* Bouton vers Poké-Battle 2 */
         .btn-link { background: gold; color: black; text-decoration: none; display: block; margin-top: 20px; padding: 12px; border-radius: 10px; font-weight: bold; border: 2px solid #b8860b; }
         
+        /* Poké-Battle (Locké) */
         .btn-stat { background: #333; color: white; width: 120px; height: 45px; border: 1px solid #555; }
         .btn-stat.selected { border: 2px solid gold; background: #443a10; }
         .btn-stat:disabled { opacity: 0.3; cursor: not-allowed; }
         #timer { font-size: 2.5em; color: #ee1515; font-weight: bold; }
 
+        /* Qui est-ce */
         .grid-container { width: 480px; }
         .guess-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; min-height: 200px; }
         .poke-card { background: #333; padding: 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
@@ -29,8 +32,8 @@
         
         #chat-zone { background: #111; height: 120px; overflow-y: auto; padding: 10px; text-align: left; border-radius: 10px; border: 1px solid #444; margin: 10px 0; }
         .status-bar { background: #000; padding: 10px; border-radius: 10px; margin-bottom: 10px; color: gold; font-weight: bold; border: 1px solid gold; }
-        footer { margin-top: 15px; color: #666; font-size: 0.8em; }
         .final-panel { background: #252525; border: 2px solid gold; padding: 15px; border-radius: 15px; margin-top: 10px; }
+        footer { margin-top: 15px; color: #666; font-size: 0.8em; }
     </style>
 </head>
 <body>
@@ -46,9 +49,7 @@
         <button onclick="go(true)" style="background: #ee1515; color: white;">CRÉER</button>
         <button onclick="go(false)" style="background: #3b4cca; color: white;">REJOINDRE</button>
 
-        <a href="https://leblancmaxence75-lang.github.io/pok-game-2-/" class="btn-link">
-            ⚡ JOUER À POKÉ-BATTLE 2
-        </a>
+        <a href="https://leblancmaxence75-lang.github.io/pok-game-2-/" class="btn-link">⚡ JOUER À POKÉ-BATTLE 2</a>
         <footer>Réalisé par Vegechou, By Vegechou</footer>
     </div>
 
@@ -102,6 +103,11 @@
                 <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
                 <button id="btn-toggle-guess" onclick="enableGuessMode()" style="background: gold; width: 100%;">TENTER UN GUESS FINAL !</button>
                 <button id="btn-submit-guess" class="hidden" onclick="sendFinalGuess()" style="background: #00ff00; color:black; width: 100%;">VALIDER MON GUESS</button>
+            </div>
+            <div id="finish-guess" class="hidden">
+                <div id="guess-recap-box" style="display: flex; justify-content: space-around; margin-bottom: 10px;"></div>
+                <h2 id="guess-final-msg" style="color: gold;"></h2>
+                <button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button>
             </div>
         </div>
     </div>
@@ -172,9 +178,7 @@
             return arr;
         }
 
-        // --- BATTLE LOGIC ---
         function setReady() { roomRef.child('p/' + user).update({ ready: true }); }
-
         function resetBattleRound(d) {
             currentPoke = d.poke; selectedStat = null;
             document.getElementById('ready-zone-battle').classList.add('hidden');
@@ -183,20 +187,14 @@
             document.getElementById('n-battle').innerText = d.poke.name;
             document.getElementById('i-battle').src = d.poke.img;
             document.getElementById('statut-battle').innerText = "Round " + d.round + "/6";
-            document.querySelectorAll('.btn-stat').forEach(b => { 
-                b.classList.remove('selected'); 
-                b.disabled = usedStats.includes(b.id.replace('b-', '')); 
-            });
+            document.querySelectorAll('.btn-stat').forEach(b => { b.classList.remove('selected'); b.disabled = usedStats.includes(b.id.replace('b-', '')); });
             startTimer();
         }
-
         function startTimer() {
             clearInterval(timerInt); let s = 5; document.getElementById('timer').innerText = s;
             timerInt = setInterval(() => { s--; document.getElementById('timer').innerText = s; if(s<=0) { clearInterval(timerInt); submitBattleChoice(); } }, 1000);
         }
-
         function selectStat(s) { selectedStat = s; document.querySelectorAll('.btn-stat').forEach(b => b.classList.remove('selected')); document.getElementById('b-'+s).classList.add('selected'); }
-
         function submitBattleChoice() {
             if(!selectedStat) selectedStat = ['hp','atk','def','spa','spd','spe'].find(k => !usedStats.includes(k));
             let val = currentPoke.stats[selectedStat];
@@ -204,53 +202,49 @@
             myHistory.push({ statName: selectedStat.toUpperCase(), value: val });
             roomRef.child('p/' + user).update({ val: val, total: myTotal, history: myHistory });
             document.getElementById('combat-zone').classList.add('hidden');
-            document.getElementById('statut-battle').innerText = "Attente de l'adversaire...";
         }
-
         function showResultRound(pl, d) {
             document.getElementById('res-battle').classList.remove('hidden');
             let win = pl[0].val > pl[1].val ? pl[0].name : (pl[1].val > pl[0].val ? pl[1].name : "Égalité");
-            document.getElementById('win-round').innerText = "Round gagné par : " + win;
+            document.getElementById('win-round').innerText = "Vainqueur : " + win;
             if(host) document.getElementById('next-btn').style.display = "block";
         }
-
         async function nextRound() {
             const snap = await roomRef.once('value'); const d = snap.val();
             if(d.round >= 6) roomRef.update({ battleOver: true });
-            else { 
-                for(let k in d.p) roomRef.child('p/'+k).update({ val: -1 }); 
-                roomRef.update({ round: d.round + 1, poke: await fetchPoke() }); 
-            }
+            else { for(let k in d.p) roomRef.child('p/'+k).update({ val: -1 }); roomRef.update({ round: d.round + 1, poke: await fetchPoke() }); }
         }
-
         function showFinalBattleUI(pl) {
-            document.getElementById('game-battle').innerHTML = `<div class="box"><h2>🏆 SCORE FINAL 🏆</h2><div id="rcp"></div><h1 id="ovw"></h1><button onclick="location.reload()">RETOUR AU MENU</button></div>`;
+            document.getElementById('game-battle').innerHTML = `<div class="box"><h2>FIN</h2><div id="rcp"></div><h1 id="ovw"></h1><button onclick="location.reload()">MENU</button></div>`;
             pl.forEach(p => {
                 let h = `<div class="final-panel"><h3>${p.name}</h3><table style="width:100%; color:white;">`;
                 p.history.forEach(s => { h += `<tr><td>${s.statName}</td><td>${s.value}</td></tr>`; });
-                h += `<tr style="color:gold; font-weight:bold;"><td>TOTAL</td><td>${p.total}</td></tr></table></div>`;
+                h += `<tr style="color:gold"><td>TOTAL</td><td>${p.total}</td></tr></table></div>`;
                 document.getElementById('rcp').innerHTML += h;
             });
             let win = pl[0].total > pl[1].total ? pl[0].name : (pl[1].total > pl[0].total ? pl[1].name : "ÉGALITÉ");
             document.getElementById('ovw').innerText = "GAGNANT : " + win;
-            document.getElementById('ovw').style.background = "gold";
-            document.getElementById('ovw').style.color = "black";
         }
 
-        // --- GUESS LOGIC ---
         function handleGuessSync(d, pl) {
             if(!d.grid) return;
             if(!fullGrid.length || document.getElementById('guess-grid').innerHTML === "") {
                 fullGrid = d.grid;
                 let html = "";
-                d.grid.forEach(p => { html += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; });
+                d.grid.forEach(p => { 
+                    html += `<div class="poke-card" id="pc-${p.id}" onclick="clickGuess(${p.id})"><img src="${p.img}"><p style="font-size:0.6em;">${p.name}</p></div>`; 
+                });
                 document.getElementById('guess-grid').innerHTML = html;
             }
             const pWithSecret = pl.filter(p => p.secret !== null && p.secret !== undefined);
             document.getElementById('wait-players-guess').innerText = `Prêts : ${pWithSecret.length}/2`;
             if(pl.length === 2 && pWithSecret.length === 2) {
                 document.getElementById('setup-guess').classList.add('hidden');
+                document.getElementById('wait-players-guess').classList.add('hidden');
                 document.getElementById('play-guess').classList.remove('hidden');
+            } else {
+                document.getElementById('setup-guess').classList.remove('hidden');
+                document.getElementById('play-guess').classList.add('hidden');
             }
             if(d.messages) {
                 document.getElementById('chat-zone').innerHTML = Object.values(d.messages).map(m => `<div><b>${m.u}:</b> ${m.t}</div>`).join('');
@@ -273,14 +267,13 @@
             if(!tempSecretId) return alert("Choisis un Pokémon !");
             isSecretLocked = true;
             roomRef.child('p/' + user).update({ secret: tempSecretId });
-            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente de l'autre dresseur...</p>`;
+            document.getElementById('setup-guess').innerHTML = `<p class="gold-txt">Secret validé ! En attente...</p>`;
         }
 
         function enableGuessMode() {
             isGuessMode = true;
             document.getElementById('btn-toggle-guess').classList.add('hidden');
             document.getElementById('btn-submit-guess').classList.remove('hidden');
-            alert("Mode GUESS activé : Clique sur le Pokémon de l'adversaire puis valide !");
         }
 
         async function sendFinalGuess() {
@@ -292,11 +285,13 @@
         }
 
         function showFinalGuessUI(res) {
-            document.getElementById('game-guess').innerHTML = `<div class="box"><h2>RÉVÉLATION</h2><div id="gres" style="display:flex; justify-content:space-around;"></div><h2 id="guess-status"></h2><h1 id="gwin" style="background:gold; color:black; padding:10px; margin-top:15px; border-radius:10px;"></h1><button onclick="location.reload()" style="background: #ee1515; color: white; width: 100%;">RETOUR AU MENU</button></div>`;
+            document.getElementById('play-guess').classList.add('hidden');
+            document.getElementById('finish-guess').classList.remove('hidden');
             const c1 = fullGrid.find(x => x.id === res.p1S); const c2 = fullGrid.find(x => x.id === res.p2S);
-            document.getElementById('gres').innerHTML = `<div class="box" style="width:150px; border-color:white;"><b>${res.p1}</b><br><img src="${c1.img}" width="80"><br>${c1.name}</div><div class="box" style="width:150px; border-color:white;"><b>${res.p2}</b><br><img src="${c2.img}" width="80"><br>${c2.name}</div>`;
-            document.getElementById('guess-status').innerText = res.isSuccess ? "✅ GUESS RÉUSSI !" : "❌ GUESS MANQUÉ !";
-            document.getElementById('gwin').innerText = "VAINQUEUR : " + res.winner;
+            document.getElementById('guess-recap-box').innerHTML = `
+                <div class="final-panel"><b>${res.p1}</b><br><img src="${c1.img}" width="100"><br>${c1.name}</div>
+                <div class="final-panel"><b>${res.p2}</b><br><img src="${c2.img}" width="100"><br>${c2.name}</div>`;
+            document.getElementById('guess-final-msg').innerText = "VAINQUEUR : " + res.winner;
         }
 
         function sendMsg(type) {
